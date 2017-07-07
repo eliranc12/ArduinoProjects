@@ -1,24 +1,14 @@
-/*
-  DHCP-based IP printer
-
-  This sketch uses the DHCP extensions to the Ethernet library
-  to get an IP address via DHCP and print the address obtained.
-  using an Arduino Wiznet Ethernet shield.
-
-  Circuit:
-   Ethernet shield attached to pins 10, 11, 12, 13
-
-  created 12 April 2011
-  modified 9 Apr 2012
-  by Tom Igoe
-  modified 02 Sept 2015
-  by Arturo Guadalupi
-
-*/
-
 #include <SPI.h>
 #include <Ethernet.h>
- /* The circuit:
+#include <LiquidCrystal.h>
+#include "DHT.h"
+
+
+#define LCD_BUTTON 17
+#define SENSE_INTERVAL 600000 //10 min
+//#define SENSE_INTERVAL 30000 //30 seconds DBG...
+
+ /* The LiquidCrystal circuit:
  * LCD RS pin to digital pin 2
  * LCD Enable pin to digital pin 3
  * LCD D4 pin to digital pin 4
@@ -31,38 +21,13 @@
  * 10K resistor:
  * ends to +5V and ground
  * wiper to LCD VO pin (pin 3)
-
- Library originally added 18 Apr 2008
- by David A. Mellis
- library modified 5 Jul 2009
- by Limor Fried (http://www.ladyada.net)
- example added 9 Jul 2009
- by Tom Igoe
- modified 22 Nov 2010
- by Tom Igoe
-
- This example code is in the public domain.
-
- http://www.arduino.cc/en/Tutorial/LiquidCrystal
+ initialize the library with the numbers of the interface pins
  */
-
-// include the library code:
-#include <LiquidCrystal.h>
-
-// initialize the library with the numbers of the interface pins
 LiquidCrystal lcd(2, 3, 4, 8, 5, 6);
 
-#include "DHT.h"
-
+// initializing DHT22 sensor
 DHT dht;
 
-#define AM2302_PIN 7     // what pin on the arduino is the DHT22 data line connected to
-
-// For details on how to hookup the DHT22 sensor to the Arduino then checkout this page
-// http://cactus.io/hookups/sensors/temperature-humidity/am2302/hookup-arduino-to-am2302-temp-humidity-sensor
-
-// Initialize DHT sensor for normal 16mhz Arduino. 
-//AM2302 dht(AM2302_PIN);
 // Enter a MAC address for your controller below.
 // Newer Ethernet shields have a MAC address printed on a sticker on the shield
 byte mac[] = {
@@ -73,20 +38,30 @@ byte mac[] = {
 // with the IP address and port of the server
 // that you want to connect to (port 80 is default for HTTP):
 EthernetClient client;
+
+// globals
 int t = 0;  // TEMPERATURE VAR
 int h = 0;  // HUMIDITY VAR
 String data;
+int prev_button_value = 0;
+unsigned long interval = 1000;
+unsigned long previousMillis;
 
 void setup() {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
-  lcd.begin(16, 2);
-  print_to_lcd("initializing...");
-  //lcd.print("initializing...");
   // this check is only needed on the Leonardo:
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
+
+  // init Display
+  lcd.begin(16, 2);
+  print_to_lcd("initializing...");
+
+ //init push button
+  pinMode(LCD_BUTTON,INPUT); // set analog 0 pin to input
+  previousMillis = millis();
 
   // start the Ethernet connection:
   if (Ethernet.begin(mac) == 0) {
@@ -96,26 +71,49 @@ void setup() {
       ;
   }
 
-  Serial.println("AM2302 Humidity - Temperature Sensor started...");
+  Serial.println("DHT22 Humidity - Temperature Sensor started...");
   //Serial.println("RH\t\tTemp (C)\tTemp (F)\tHeat Index (C)\t Heat Index (F)");
-
   dht.setup(7); // data pin 2
-  //dht.begin();
   
-  // print your local IP address:
+  // print your local IP address to serial port:
   printIPAddress();
   data = "";
+  delay(1000);
+  //turn_off_display();
+  sense();
 }
 
 void loop() {
-  delay(dht.getMinimumSamplingPeriod());
+  unsigned long currentMillis = millis();
+  if(currentMillis - previousMillis > SENSE_INTERVAL) {
+    previousMillis = currentMillis; 
+    sense(); 
+  }
+  
+  int BUTTON = digitalRead(LCD_BUTTON);  // read analog pin 0 as digital and set it to a variable
+  if (BUTTON == HIGH){
+    if (!prev_button_value) {
+      prev_button_value = 1;
+      sense();
+      previousMillis = currentMillis;
+      //turn_on_display();      
+    }
+  } else if (BUTTON == LOW) {
+    prev_button_value = 0;
+  }
+}
 
+
+void sense() {
+  print_to_lcd_2_lines("Sensing now" ,"Please wait...");
+  delay(dht.getMinimumSamplingPeriod());
   h = dht.getHumidity();
   t = dht.getTemperature();
   data = String("temp1=") + t + "&hum1=" + h;
-  String to_print = String(" T = ") + t + ", H = " + h;
+  String line1_to_print = String(" Temperature ") + t + (char)223;
+  String line2_to_print = String(" Humidity ") + h + "%";
 
-  Serial.println("sending data to server...");
+  delay (2000);
   if (client.connect("eliranc12.atwebpages.com",80)) { // REPLACE WITH YOUR SERVER ADDRESS
     print_to_lcd_2_lines("Sending data" ,"to server...");
     Serial.println("connected to server");
@@ -136,19 +134,9 @@ void loop() {
     client.stop();  // DISCONNECT FROM THE SERVER
   }
 
-
-  //Serial.print(dht.humidity); Serial.print(" %\t\t");
-  //Serial.print(dht.temperature_C); Serial.print(" *C\t");
-  //Serial.print(dht.temperature_F); Serial.print(" *F\t");
-  //Serial.print(dht.computeHeatIndex_C()); Serial.print(" *C\t");
-  //Serial.print(dht.computeHeatIndex_F()); Serial.println(" *F");
-  
-  // Wait a few seconds between measurements. The AM2302 should not be read at a higher frequency of
-  // about once every 2 seconds. So we add a 3 second delay to cover this.
   delay(1000);
-  print_to_lcd(to_print);
-  delay(300000);
-  
+  print_to_lcd_2_lines(line1_to_print,line2_to_print);
+ 
   switch (Ethernet.maintain())
   {
     case 1:
@@ -200,7 +188,6 @@ void printIPAddress()
 void print_to_lcd(String to_print) {
   lcd.clear();
   delay(100);
-  //lcd.setCursor(0, 1);
   lcd.print(to_print);
 }
 
@@ -211,5 +198,13 @@ void print_to_lcd_2_lines(String to_print1, String to_print2) {
   lcd.setCursor(0, 1);
   delay(100);
   lcd.print(to_print2);
+}
+
+void turn_on_display(){
+  lcd.display();  
+}
+
+void turn_off_display(){
+  lcd.noDisplay();  
 }
 
