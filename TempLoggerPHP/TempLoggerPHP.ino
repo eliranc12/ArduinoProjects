@@ -110,7 +110,7 @@ void sense() {
   h = dht.getHumidity();
   t = dht.getTemperature();
   data = String("temp1=") + t + "&hum1=" + h;
-  String line1_to_print = String(" Temperature ") + t + (char)223;
+  String line1_to_print = String(" Temp ") + t + (char)223 + "C";
   String line2_to_print = String(" Humidity ") + h + "%";
 
   delay (2000);
