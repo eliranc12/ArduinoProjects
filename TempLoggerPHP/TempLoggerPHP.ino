@@ -7,6 +7,20 @@
 #define LCD_BUTTON 17
 #define SENSE_INTERVAL 600000 //10 min
 //#define SENSE_INTERVAL 30000 //30 seconds DBG...
+#define LCD_DELAY 1000
+
+
+// degree centigrade
+byte newChar1[8] = {
+  B01000,
+  B10100,
+  B01000,
+  B00011,
+  B00100,
+  B00100,
+  B00011,
+  B00000
+};
 
  /* The LiquidCrystal circuit:
  * LCD RS pin to digital pin 2
@@ -57,7 +71,8 @@ void setup() {
 
   // init Display
   lcd.begin(16, 2);
-  print_to_lcd("initializing...");
+  lcd.createChar(0, newChar1);
+  print_to_lcd(String("        ...") + char(172) + char(167) + char(186) + char(160) + char(174));
 
  //init push button
   pinMode(LCD_BUTTON,INPUT); // set analog 0 pin to input
@@ -78,7 +93,7 @@ void setup() {
   // print your local IP address to serial port:
   printIPAddress();
   data = "";
-  delay(1000);
+  delay(LCD_DELAY);
   //turn_off_display();
   sense();
 }
@@ -105,17 +120,18 @@ void loop() {
 
 
 void sense() {
-  print_to_lcd_2_lines("Sensing now" ,"Please wait...");
+  print_to_lcd_2_lines(String("   ") + char(164) + char(184) + char(165) + char(168) + char(184) + char(180) + char(174) + char(168) + " " + char(163) + char(163) + char(165) + char(174) ,String("        ")  + char(175) + char(186) + char(174) + char(164) + " " + char(160) + char(176) + char(160));
   delay(dht.getMinimumSamplingPeriod());
   h = dht.getHumidity();
   t = dht.getTemperature();
   data = String("temp1=") + t + "&hum1=" + h;
-  String line1_to_print = String(" Temp ") + t + (char)223 + "C";
-  String line2_to_print = String(" Humidity ") + h + "%";
-
-  delay (2000);
+  String line1_to_print = String("    ") + t;
+  String line1_to_print_after_sign = String(" ") + char(164) + char(184) + char(165) + char(168) + char(184) + char(180) + char(174) + char(168);
+  String line2_to_print = String ("        ") + h + "%" + " " + char(186) + char(165) + char(167) + char(172);
+  
+  delay (LCD_DELAY);
   if (client.connect("eliranc12.atwebpages.com",80)) { // REPLACE WITH YOUR SERVER ADDRESS
-    print_to_lcd_2_lines("Sending data" ,"to server...");
+    print_to_lcd_2_lines(String("      ") + char(164) + char (163) + char (169) + char (163) + char (174) + " " + char(167) + char (172) + char(165) + char(185) ,String("         ...") + char(186) + char(184) + char(185) + char(172));
     Serial.println("connected to server");
     Serial.println("sending to server: " + data);
     client.println("POST /add.php HTTP/1.1"); 
@@ -134,8 +150,8 @@ void sense() {
     client.stop();  // DISCONNECT FROM THE SERVER
   }
 
-  delay(1000);
-  print_to_lcd_2_lines(line1_to_print,line2_to_print);
+  delay(LCD_DELAY*2);
+  print_to_lcd_2_lines_with_sign(line1_to_print,line1_to_print_after_sign,line2_to_print);
  
   switch (Ethernet.maintain())
   {
@@ -195,6 +211,25 @@ void print_to_lcd_2_lines(String to_print1, String to_print2) {
   lcd.clear();
   delay(100);
   lcd.print(to_print1);
+  lcd.setCursor(0, 1);
+  delay(100);
+  lcd.print(to_print2);
+}
+
+void print_to_lcd_2_lines_with_sign(String to_print1, String to_print1_after_sign, String to_print2) {
+  lcd.clear();
+  delay(100);
+  lcd.print(to_print1);
+  lcd.write(byte(0));
+  int c = to_print1_after_sign.length();
+  for(int x = 0; x < c; x++)
+  {
+     char to_write = to_print1_after_sign.charAt(x);
+     lcd.write(to_write);
+  }
+
+  
+  //lcd.print(to_print1_after_sign);
   lcd.setCursor(0, 1);
   delay(100);
   lcd.print(to_print2);
